@@ -98,7 +98,11 @@ interface/instalador.
 
 ### Abrir a interface gráfica
 
-Na raiz do repositório, compile primeiro e inicie a interface:
+**Para abrir o programa, execute o script `ps2classic-gui` pelo terminal.**
+Ele é o lançador da interface; não abra o arquivo C `ps2classic.c` nem tente
+executar o script diretamente pela página do GitHub.
+
+Na raiz do repositório, compile primeiro e depois execute:
 
 ```bash
 cd ps2classic-ps2classic
@@ -106,8 +110,19 @@ make
 ./ps2classic-gui
 ```
 
-Se você baixou o pacote Linux, o executável já está incluído: basta extrair,
-entrar na pasta `ps2classic-ps2classic` e executar `./ps2classic-gui`.
+Se você baixou o pacote Linux, o executável já está incluído. Extraia o `.tar.gz`
+e execute:
+
+```bash
+cd ps2classic-ps2classic
+./ps2classic-gui
+```
+
+Se o Linux informar que falta permissão para executar o script, rode na mesma
+pasta `chmod +x ps2classic-gui ps2classic` e tente novamente. A interface
+depende do Zenity instalado. Para iniciar sem digitar o comando a cada vez,
+instale o atalho do menu com `./install-desktop.sh` a partir da raiz do
+repositório.
 
 ### Gerar um PKG para o PS3
 
@@ -193,6 +208,9 @@ não tem um remoto configurado.
 
 - **“A interface gráfica precisa do Zenity”**: instale o pacote `zenity` da
   sua distribuição.
+- **Clicar no arquivo não abre a interface**: abra um terminal na pasta
+  `ps2classic-ps2classic` e execute `./ps2classic-gui`; se necessário, rode
+  `chmod +x ps2classic-gui ps2classic` antes.
 - **“O programa ainda não foi compilado”**: entre em
   `ps2classic-ps2classic` e rode `make`.
 - **O item de gerar PKG informa que `pop-fe2` não está instalado**: execute
