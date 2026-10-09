@@ -44,6 +44,8 @@ fi
 (cd -- "$POP_FE2_DIR/PSL1GHT/tools/ps3py" && \
 	"$POP_FE2_DIR/.venv/bin/python" setup.py build_ext --inplace)
 make -C "$POP_FE2_DIR/make_npdata/Linux"
+(cd -- "$POP_FE2_DIR/atracdenc/src" && \
+	cmake . && make)
 mkdir -p "$POP_FE2_DIR/ART"
 
 printf '\nInstalação concluída. Abra a interface com:\n  %s/ps2classic-gui\n' "$APP_DIR"

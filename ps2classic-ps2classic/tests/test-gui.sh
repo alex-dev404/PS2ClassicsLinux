@@ -46,6 +46,37 @@ fi
 MOCK_ZENITY
 chmod +x "$TMP_DIR/bin/zenity"
 
+cat >"$TMP_DIR/bin/dpkg-query" <<'MOCK_DPKG_QUERY'
+#!/usr/bin/env bash
+package="${@: -1}"
+if [[ "$package" == "${MOCK_MISSING_PACKAGE:-}" \
+	&& ! -e "$GUI_TEST_DIR/package-$package-installed" ]]; then
+	exit 1
+fi
+printf 'ii \n'
+MOCK_DPKG_QUERY
+chmod +x "$TMP_DIR/bin/dpkg-query"
+
+cat >"$TMP_DIR/bin/apt-get" <<'MOCK_APT_GET'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >>"$GUI_TEST_DIR/apt-get-args"
+if [[ "${1:-}" == install ]]; then
+	for arg in "${@:3}"; do
+		[[ "$arg" == -* ]] || : >"$GUI_TEST_DIR/package-$arg-installed"
+	done
+fi
+MOCK_APT_GET
+chmod +x "$TMP_DIR/bin/apt-get"
+
+cat >"$TMP_DIR/bin/sudo" <<'MOCK_SUDO'
+#!/usr/bin/env bash
+if [[ "${1:-}" == -v ]]; then
+	exit 0
+fi
+"$@"
+MOCK_SUDO
+chmod +x "$TMP_DIR/bin/sudo"
+
 cat >"$TMP_DIR/bin/pop-fe2.py" <<'MOCK_POP_FE2'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -83,5 +114,13 @@ rm -f "$TMP_DIR/list-count" "$TMP_DIR/dialog-errors"
 export POP_FE2="$TMP_DIR/missing-tool"
 "$APP_DIR/ps2classic-gui"
 grep -q 'Não encontrei a ferramenta indicada' "$TMP_DIR/dialog-errors"
+
+rm -f "$TMP_DIR/list-count"
+export POP_FE2=pop-fe2.py
+export MOCK_MISSING_PACKAGE=zenity
+"$APP_DIR/ps2classic-gui"
+grep -Fxq 'update' "$TMP_DIR/apt-get-args"
+grep -Fxq 'install -y zenity' "$TMP_DIR/apt-get-args"
+test -e "$TMP_DIR/package-zenity-installed"
 
 printf 'GUI package-generation checks passed\n'

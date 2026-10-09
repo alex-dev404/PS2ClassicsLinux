@@ -68,19 +68,26 @@ GitHub.
 ### Requisitos
 
 - Linux x86_64.
-- GCC (ou compilador C compatível) e GNU Make para compilar a partir do código.
+- GCC, compilador C++, GNU Make e CMake para compilar a ferramenta e os
+  auxiliares.
 - Zenity para abrir a interface gráfica.
-- Git, Python 3 com suporte a `venv`, Make e ferramentas de compilação para
-  instalar os componentes externos do `pop-fe2`.
+- Git e Python 3 com `venv`, `pip` e suporte a Tkinter para instalar o
+  `pop-fe2`.
+- FFmpeg e libsndfile para os recursos de áudio do `pop-fe2`.
 
 Em distribuições baseadas em Debian ou Ubuntu, instale o básico com:
 
 ```bash
 sudo apt update
-sudo apt install build-essential git make python3 python3-venv zenity
+sudo apt install build-essential cmake ffmpeg git libsndfile1-dev make \
+  pkg-config python3 python3-dev python3-pip python3-tk python3-venv zenity
 ```
 
-Os nomes dos pacotes podem variar em outras distribuições.
+Ao iniciar `ps2classic-gui`, o programa verifica esses requisitos e instala
+automaticamente os pacotes ausentes em distribuições Debian/Ubuntu. A
+instalação pode solicitar a senha de administrador e precisa de conexão com a
+Internet. Os nomes dos pacotes variam em outras distribuições; nelas, instale
+os requisitos manualmente antes de abrir a interface.
 
 ### Compilar a partir do código-fonte
 
@@ -99,8 +106,12 @@ interface/instalador.
 ### Abrir a interface gráfica
 
 **Para abrir o programa, execute o script `ps2classic-gui` pelo terminal.**
-Ele é o lançador da interface; não abra o arquivo C `ps2classic.c` nem tente
-executar o script diretamente pela página do GitHub.
+Ele verifica e prepara as dependências, compila a ferramenta principal e, se
+necessário, baixa e compila o `pop-fe2` e seus auxiliares antes de abrir a
+interface. O progresso e eventuais erros aparecem no terminal. Em execuções
+posteriores, os pacotes e componentes já instalados são reutilizados. Não abra
+o arquivo C `ps2classic.c` nem tente executar o script diretamente pela página
+do GitHub.
 
 Na raiz do repositório, compile primeiro e depois execute:
 
@@ -119,10 +130,9 @@ cd ps2classic-ps2classic
 ```
 
 Se o Linux informar que falta permissão para executar o script, rode na mesma
-pasta `chmod +x ps2classic-gui ps2classic` e tente novamente. A interface
-depende do Zenity instalado. Para iniciar sem digitar o comando a cada vez,
-instale o atalho do menu com `./install-desktop.sh` a partir da raiz do
-repositório.
+pasta `chmod +x ps2classic-gui ps2classic` e tente novamente. Para iniciar sem
+digitar o comando a cada vez, instale o atalho do menu com
+`./install-desktop.sh` a partir da raiz do repositório.
 
 ### Gerar um PKG para o PS3
 
@@ -139,8 +149,9 @@ prepara também os metadados e a estrutura necessários ao pacote. O título,
 os dados de configuração e a arte disponíveis dependem da base de dados do
 `pop-fe2`.
 
-Para instalar o gerador e seus auxiliares na pasta local do projeto, execute
-na raiz:
+O lançador instala o gerador e seus auxiliares na pasta local do projeto
+automaticamente se eles ainda não estiverem prontos. Também é possível
+executar a instalação manualmente, na raiz:
 
 ```bash
 ./ps2classic-ps2classic/setup-pop-fe2.sh
@@ -206,13 +217,15 @@ não tem um remoto configurado.
 
 ## Limitações e solução de problemas
 
-- **“A interface gráfica precisa do Zenity”**: instale o pacote `zenity` da
-  sua distribuição.
+- **Falha ao instalar dependências**: confira a conexão com a Internet e, em
+  Debian/Ubuntu, autorize a instalação dos pacotes de sistema quando solicitado.
+  Em outras distribuições, instale manualmente os requisitos listados acima.
 - **Clicar no arquivo não abre a interface**: abra um terminal na pasta
   `ps2classic-ps2classic` e execute `./ps2classic-gui`; se necessário, rode
   `chmod +x ps2classic-gui ps2classic` antes.
-- **“O programa ainda não foi compilado”**: entre em
-  `ps2classic-ps2classic` e rode `make`.
+- **“O programa ainda não foi compilado”**: o lançador tenta compilá-lo
+  automaticamente; se a compilação falhar, entre em `ps2classic-ps2classic` e
+  rode `make` para ver os detalhes.
 - **O item de gerar PKG informa que `pop-fe2` não está instalado**: execute
   `./ps2classic-ps2classic/setup-pop-fe2.sh` na raiz ou configure `POP_FE2`.
 - **O processo de PKG falha ou não encontra dados do jogo**: confirme que o
