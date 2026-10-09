@@ -1,0 +1,10 @@
+/pax_global_header
+/ps2classic-ps2classic/*.o
+/ps2classic-ps2classic/ps2classic
+/ps2classic-ps2classic/external/pop-fe2/
+/ps2classic-ps2classic/core
+/ps2classic-ps2classic/core.*
+*.pkg
+*.BIN.ENC
+*.BIN.EDAT
+*.VME

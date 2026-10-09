@@ -133,7 +133,7 @@ void ps2_decrypt_image(char mode[], char image_name[], char meta_file[], char da
 	data_size = be64(header + 0x88);
 	num_child_segments = segment_size / PS2_META_ENTRY_SIZE;
 
-	printf("segment size: %x\ndata_size: %llx\n\n", segment_size, data_size);
+	printf("segment size: %x\ndata_size: %llx\n\n", segment_size, (unsigned long long)data_size);
 
 	//alloc buffers
 	data_buffer = malloc(segment_size*num_child_segments);
@@ -217,7 +217,7 @@ void ps2_encrypt_image(char mode[], char image_name[], char data_file[], char re
 	data_size = ftello(in);
 	fseeko(in, 0, SEEK_SET);
 
-	printf("segment size: %x\ndata_size: %llx\nCID: %s\niso %s\nout file: %s\n", segment_size, data_size, CID, image_name, data_file);
+	printf("segment size: %x\ndata_size: %llx\nCID: %s\niso %s\nout file: %s\n", segment_size, (unsigned long long)data_size, CID, image_name, data_file);
 
 	//prepare buffers
 	data_buffer = malloc(segment_size * 0x200);
@@ -352,6 +352,7 @@ int main(int argc, char *argv[])
 {
 
 	u8 * root_key = NULL;
+	int root_key_allocated = 0;
 
 	printf("\nps2classic\nhttp://gitorious.ps3dev.net/ps2classic\nLicense: GPLv3\n\n");
 
@@ -367,7 +368,7 @@ int main(int argc, char *argv[])
 		exit(0);
 	}
 
-	if(argc > 6)
+	if((strcmp(argv[1], "d") == 0 || strcmp(argv[1], "e") == 0) && argc > 6)
 		klicensee = mmap_file(argv[3]);
 
 	if(strcmp(argv[1], "d") == 0)
@@ -383,10 +384,13 @@ int main(int argc, char *argv[])
 	else if(strcmp(argv[1], "vd") == 0 || strcmp(argv[1], "ve") == 0)
 	{
 		if(argc == 6)
-			root_key = mmap_file(argv[3]);
+			root_key = mmap_file(argv[5]);
 		else if(argc == 5){
 			root_key = malloc(0x30);
+			if(root_key == NULL)
+				fail("unable to allocate root key");
 			memset(root_key, 0, 0x30);
+			root_key_allocated = 1;
 		}else{
 			printf("Error: invalid number of arguments for vme processing\n");
 			exit(0);
@@ -397,7 +401,8 @@ int main(int argc, char *argv[])
 		else
 			ps2_crypt_vmc(argv[2], argv[3], argv[4], root_key, PS2_VMC_ENCRYPT);
 
-		free(root_key);
+		if(root_key_allocated)
+			free(root_key);
 	}
 	else if(strcmp(argv[1], "prepare") == 0 && argc == 3)
 	{

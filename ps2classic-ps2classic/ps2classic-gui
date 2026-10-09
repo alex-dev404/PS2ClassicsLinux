@@ -1,0 +1,253 @@
+#!/usr/bin/env bash
+
+set -u
+
+APP_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PROGRAM="$APP_DIR/ps2classic"
+TITLE="PS2 Classics"
+
+if ! command -v zenity >/dev/null 2>&1; then
+	printf 'A interface gráfica precisa do Zenity. Instale o pacote zenity.\n' >&2
+	exit 1
+fi
+
+if [[ ! -x "$PROGRAM" ]]; then
+	zenity --error --title="$TITLE" --text="O programa ainda não foi compilado.\n\nAbra um terminal nesta pasta e execute: make"
+	exit 1
+fi
+
+show_error() {
+	zenity --error --title="$TITLE" --text="$1"
+}
+
+choose_mode() {
+	zenity --list --radiolist --title="$TITLE" \
+		--text="Selecione o tipo de console:" \
+		--column="" --column="Tipo" \
+		TRUE CEX FALSE DEX \
+		--print-column=2
+}
+
+choose_input() {
+	local description="$1"
+	zenity --file-selection --title="$description"
+}
+
+choose_output() {
+	local description="$1"
+	local suggested_name="$2"
+	zenity --file-selection --save --confirm-overwrite \
+		--title="$description" --filename="$suggested_name"
+}
+
+run_operation() {
+	local description="$1"
+	shift
+	local log status pid expected_output=""
+	if [[ "${1:-}" == "--expect-output" ]]; then
+		expected_output="$2"
+		shift 2
+	fi
+	log="$(mktemp)" || {
+		show_error "Não foi possível criar um arquivo temporário para registrar a operação."
+		return 1
+	}
+
+	"$@" >"$log" 2>&1 &
+	pid=$!
+	(
+		while kill -0 "$pid" 2>/dev/null; do
+			printf '# %s\n' "$description"
+			sleep 0.5
+		done
+	) | zenity --progress --pulsate --no-cancel --auto-close \
+		--title="$TITLE" --text="$description"
+	wait "$pid"
+	status=$?
+
+	if (( status == 0 )) && [[ -n "$expected_output" && ! -s "$expected_output" ]]; then
+		printf '\nA ferramenta terminou sem criar o arquivo esperado:\n%s\n' "$expected_output" >>"$log"
+		status=1
+	fi
+
+	if (( status == 0 )); then
+		if [[ ! -s "$log" ]]; then
+			printf 'Operação concluída.\n' >"$log"
+		fi
+		zenity --text-info --title="$TITLE - Concluído" \
+			--filename="$log" --width=640 --height=420
+	else
+		zenity --text-info --title="$TITLE - Erro" \
+			--filename="$log" --width=640 --height=420
+	fi
+	rm -f -- "$log"
+	return "$status"
+}
+
+create_ps2_pkg() {
+	local configured_tool tool_path image output output_dir output_name
+	local -a tool
+
+	configured_tool="${POP_FE2:-}"
+	if [[ -n "$configured_tool" ]]; then
+		if [[ -f "$configured_tool" ]]; then
+			tool_path="$(cd -- "$(dirname -- "$configured_tool")" && pwd)/$(basename -- "$configured_tool")"
+			if [[ -x "$tool_path" ]]; then
+				tool=("$tool_path")
+			elif [[ "$tool_path" == *.py ]] && command -v python3 >/dev/null 2>&1; then
+				tool=("$(command -v python3)" "$tool_path")
+			else
+				show_error "POP_FE2 aponta para um arquivo que não pode ser executado: $configured_tool"
+				return 1
+			fi
+		elif command -v "$configured_tool" >/dev/null 2>&1; then
+			tool=("$(command -v "$configured_tool")")
+		else
+			show_error "Não encontrei a ferramenta indicada em POP_FE2: $configured_tool"
+			return 1
+		fi
+	elif command -v pop-fe2.py >/dev/null 2>&1; then
+		tool=("$(command -v pop-fe2.py)")
+	elif command -v pop-fe2 >/dev/null 2>&1; then
+		tool=("$(command -v pop-fe2)")
+	elif [[ -x "$APP_DIR/external/pop-fe2/.venv/bin/python" \
+		&& -f "$APP_DIR/external/pop-fe2/pop-fe2.py" ]]; then
+		tool=("$APP_DIR/external/pop-fe2/.venv/bin/python" \
+			"$APP_DIR/external/pop-fe2/pop-fe2.py")
+	else
+		show_error "O criador completo de PKG não está instalado.\n\nInstale o pop-fe2 e seus componentes auxiliares, ou defina POP_FE2 com o caminho do executável/script. Consulte o README para instruções."
+		return 1
+	fi
+
+	image="$(choose_input "Selecione a ISO original do jogo PS2")" || return 0
+	output="$(choose_output "Salvar pacote PS2 Classics" "${image%.*}.pkg")" || return 0
+	case "$output" in
+		*.pkg|*.PKG) ;;
+		*) output="${output}.pkg" ;;
+	esac
+	if [[ -e "$output" ]] && ! zenity --question --title="$TITLE" \
+		--text="O arquivo já existe. Deseja substituí-lo?\n\n$output"; then
+		return 0
+	fi
+	output_dir="$(dirname -- "$output")"
+	output_name="$(basename -- "$output")"
+	if [[ ! -d "$output_dir" ]]; then
+		show_error "A pasta escolhida para salvar o PKG não existe."
+		return 1
+	fi
+
+	run_operation "Gerando PKG PS2 Classics completo a partir da ISO..." \
+		--expect-output "$output" \
+		bash -c 'cd -- "$1" && shift && exec "$@"' _ "$output_dir" \
+		"${tool[@]}" "--ps3-pkg=$output_name" "--output-directory=$output_dir" \
+		--snd0=no "$image"
+}
+
+encrypt_iso() {
+	local mode key image fields real_name cid data_out
+
+	mode="$(choose_mode)" || return 0
+	key="$(choose_input "Selecione o arquivo klicensee (16 bytes)")" || return 0
+	if [[ "$(wc -c <"$key")" -ne 16 ]]; then
+		show_error "O arquivo klicensee precisa ter exatamente 16 bytes."
+		return 1
+	fi
+	image="$(choose_input "Selecione o arquivo ISO")" || return 0
+	fields="$(zenity --forms --title="$TITLE" \
+		--text="Dados do jogo para o cabeçalho PS2 Classics:" \
+		--add-entry="Nome real do arquivo/jogo" \
+		--add-entry="Content ID (CID)")" || return 0
+	IFS='|' read -r real_name cid <<<"$fields"
+	if [[ -z "$real_name" || -z "$cid" ]]; then
+		show_error "Preencha o nome real e o Content ID."
+		return 1
+	fi
+	data_out="$(choose_output "Salvar jogo criptografado" "${image%.*}.BIN.ENC")" || return 0
+	run_operation "Criptografando ISO..." "$PROGRAM" e "$mode" "$key" \
+		"$image" "$data_out" "$real_name" "$cid"
+}
+
+decrypt_iso() {
+	local mode key image data_out meta_out
+
+	mode="$(choose_mode)" || return 0
+	key="$(choose_input "Selecione o arquivo klicensee (16 bytes)")" || return 0
+	if [[ "$(wc -c <"$key")" -ne 16 ]]; then
+		show_error "O arquivo klicensee precisa ter exatamente 16 bytes."
+		return 1
+	fi
+	image="$(choose_input "Selecione a imagem PS2 Classics criptografada")" || return 0
+	data_out="$(choose_output "Salvar dados descriptografados" "${image%.*}.data")" || return 0
+	meta_out="$(choose_output "Salvar metadados descriptografados" "${image%.*}.meta")" || return 0
+	run_operation "Descriptografando imagem..." "$PROGRAM" d "$mode" "$key" \
+		"$image" "$data_out" "$meta_out"
+}
+
+crypt_vmc() {
+	local operation="$1"
+	local description="$2"
+	local mode input output key choice
+
+	mode="$(choose_mode)" || return 0
+	input="$(choose_input "Selecione o arquivo de entrada")" || return 0
+	output="$(choose_output "Salvar arquivo de saída" "${input%.*}.out")" || return 0
+	choice="$(zenity --question --title="$TITLE" \
+		--text="Deseja usar um arquivo EID Root Key de 48 bytes?")"
+	case $? in
+		0)
+			key="$(choose_input "Selecione o arquivo EID Root Key (48 bytes)")" || return 0
+			if [[ "$(wc -c <"$key")" -ne 48 ]]; then
+				show_error "O arquivo EID Root Key precisa ter exatamente 48 bytes."
+				return 1
+			fi
+			run_operation "$description" "$PROGRAM" "$operation" "$mode" "$input" "$output" "$key"
+			;;
+		1)
+			run_operation "$description" "$PROGRAM" "$operation" "$mode" "$input" "$output"
+			;;
+		*)
+			return 0
+			;;
+	esac
+}
+
+prepare_image() {
+	local image
+	image="$(choose_input "Selecione a imagem a preparar")" || return 0
+	if ! zenity --question --title="$TITLE" \
+		--text="Esta operação modifica a imagem selecionada. Deseja continuar?"; then
+		return 0
+	fi
+	run_operation "Preparando imagem..." "$PROGRAM" prepare "$image"
+}
+
+show_image_info() {
+	local image
+	image="$(choose_input "Selecione a imagem PS2 Classics")" || return 0
+	run_operation "Lendo informações da imagem..." "$PROGRAM" info "$image"
+}
+
+while true; do
+	operation="$(zenity --list --title="$TITLE" \
+		--text="Escolha uma operação:" \
+		--column="Operação" \
+		"Criptografar ISO para PS2 Classics" \
+		"Gerar PKG PS2 Classics completo (requer pop-fe2)" \
+		"Descriptografar imagem PS2 Classics" \
+		"Criptografar VMC" \
+		"Descriptografar VME para VMC" \
+		"Preparar imagem" \
+		"Ver informações da imagem" \
+		"Sair" --height=320 --width=440)" || exit 0
+
+	case "$operation" in
+		"Criptografar ISO para PS2 Classics") encrypt_iso ;;
+		"Gerar PKG PS2 Classics completo (requer pop-fe2)") create_ps2_pkg ;;
+		"Descriptografar imagem PS2 Classics") decrypt_iso ;;
+		"Criptografar VMC") crypt_vmc ve "Criptografando VMC..." ;;
+		"Descriptografar VME para VMC") crypt_vmc vd "Descriptografando VME..." ;;
+		"Preparar imagem") prepare_image ;;
+		"Ver informações da imagem") show_image_info ;;
+		"Sair") exit 0 ;;
+	esac
+done

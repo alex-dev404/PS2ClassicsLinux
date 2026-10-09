@@ -43,8 +43,12 @@ void *mmap_file(const char *path)
 		fail("fstat %s", path);
 
 	ptr = mmap(0, st.st_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-	if(ptr==NULL)
-		fail("mmap");
+#ifdef WIN32
+	if(ptr == NULL)
+#else
+	if(ptr == MAP_FAILED)
+#endif
+		fail("mmap %s", path);
 	close(fd);
 
 	return ptr;
